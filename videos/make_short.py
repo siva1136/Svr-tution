@@ -1,5 +1,5 @@
 """Render a faceless maths Short (1080x1920, 30 fps) from a list of timed scenes."""
-import subprocess, sys
+import json, subprocess, sys
 from PIL import Image, ImageDraw, ImageFont
 
 W, H, FPS = 1080, 1920, 30
@@ -44,7 +44,16 @@ def frame(items, t):
         d.text(((W - w) / 2, y + (1 - e) * 60), txt, font=f, fill=c, anchor="lm")
     return img
 
+def load(path):
+    """Scenes JSON: [[seconds, [[text, "B"|"R", size, "FG"|"ACC"|"DIM", y], ...], beep], ...]"""
+    fonts, cols = {"B": B, "R": R}, {"FG": FG, "ACC": ACC, "DIM": DIM}
+    return [(d, [(t, fonts[f], sz, cols[c], y) for t, f, sz, c, y in items], bp)
+            for d, items, bp in json.load(open(path))]
+
 def main(out):
+    global SCENES
+    if len(sys.argv) > 2:
+        SCENES = load(sys.argv[2])
     total = sum(s[0] for s in SCENES)
     # Sound: soft beep at the start of each scene flagged True.
     beeps, t0 = [], 0.0
