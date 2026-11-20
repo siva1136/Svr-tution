@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    { "collectionGroup": "liveClasses", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "courseId", "order": "ASCENDING" }, { "fieldPath": "startAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "exams", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "courseId", "order": "ASCENDING" }, { "fieldPath": "published", "order": "ASCENDING" }, { "fieldPath": "startAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "attempts", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "studentId", "order": "ASCENDING" }, { "fieldPath": "submittedAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "attempts", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "examId", "order": "ASCENDING" }, { "fieldPath": "score", "order": "DESCENDING" } ] },
+    { "collectionGroup": "invoices", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "studentId", "order": "ASCENDING" }, { "fieldPath": "dueDate", "order": "ASCENDING" } ] },
+    { "collectionGroup": "invoices", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "dueDate", "order": "ASCENDING" } ] },
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "studentId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "paidAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "homework", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "courseId", "order": "ASCENDING" }, { "fieldPath": "published", "order": "ASCENDING" }, { "fieldPath": "dueAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "homeworkSubmissions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "homeworkId", "order": "ASCENDING" }, { "fieldPath": "submittedAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "contents", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "published", "order": "ASCENDING" }, { "fieldPath": "order", "order": "ASCENDING" } ] },
+    { "collectionGroup": "enquiries", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] }
+  ],
+  "fieldOverrides": []
+}

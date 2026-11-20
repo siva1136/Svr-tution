@@ -1,0 +1,13 @@
+{
+  "projects": {
+    "default": "svr-maths-academy"
+  },
+  "targets": {
+    "svr-maths-academy": {
+      "hosting": {
+        "website": ["svr-maths-academy"],
+        "admin": ["svr-control"]
+      }
+    }
+  }
+}

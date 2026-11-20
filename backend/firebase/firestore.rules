@@ -1,0 +1,241 @@
+rules_version = '2';
+
+// ============================================================================
+// SVR MATHS ACADEMY — Firestore security rules
+//
+// Roles are carried as Firebase Auth custom claims set ONLY by Cloud Functions:
+//   token.role  : 'admin' | 'teacher' | 'student' | 'parent'
+//   token.perms : list of teacher permissions (see shared/src/constants.ts)
+//
+// Principles
+//  * Deny by default.
+//  * Anything that affects money, scores or enrolment is written by the server
+//    (Cloud Functions / Admin SDK, which bypasses these rules).
+//  * Exam questions and answer keys are never readable by students directly;
+//    the startExam function serves questions inside the exam window.
+//  * Parents can read only the records of children linked to their account.
+// ============================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function role() { return signedIn() ? request.auth.token.get('role', '') : ''; }
+    function isAdmin() { return role() == 'admin'; }
+    function isTeacher() { return role() == 'teacher'; }
+    function isStaff() { return isAdmin() || isTeacher(); }
+    function isStudent() { return role() == 'student'; }
+    function isParent() { return role() == 'parent'; }
+    function hasPerm(p) {
+      return isAdmin() || (isTeacher() && p in request.auth.token.get('perms', []));
+    }
+    function studentDoc() {
+      return get(/databases/$(database)/documents/students/$(uid()));
+    }
+    function isEnrolled(courseId) {
+      return isStudent()
+        && exists(/databases/$(database)/documents/students/$(uid()))
+        && courseId in studentDoc().data.get('enrolledCourseIds', []);
+    }
+    function isParentOf(studentId) {
+      return isParent()
+        && exists(/databases/$(database)/documents/parents/$(uid()))
+        && studentId in get(/databases/$(database)/documents/parents/$(uid())).data.get('childIds', []);
+    }
+    function isSelfOrGuardian(studentId) {
+      return signedIn() && (uid() == studentId || isParentOf(studentId));
+    }
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+    function isStr(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    function optStr(data, k, max) { return !(k in data) || (data[k] is string && data[k].size() <= max); }
+
+    // ---------- users (identity) ----------
+    match /users/{userId} {
+      allow read: if signedIn() && (uid() == userId || isStaff());
+      allow update: if signedIn() && uid() == userId && onlyChanges(['displayName', 'photoURL']);
+      allow create, delete: if false; // server only
+      // FCM device tokens for push notifications.
+      match /devices/{token} {
+        allow read, write: if signedIn() && uid() == userId;
+      }
+    }
+
+    // ---------- people ----------
+    match /students/{studentId} {
+      allow read: if isSelfOrGuardian(studentId) || isAdmin() || hasPerm('students.view');
+      allow update: if signedIn() && uid() == studentId
+        && onlyChanges(['name', 'school', 'city', 'photoURL'])
+        && isStr(request.resource.data.name, 2, 80);
+      allow update: if isAdmin();
+      allow create, delete: if false; // registerStudent / adminCreateUser functions
+    }
+
+    match /teachers/{teacherId} {
+      allow read: if isStaff();
+      allow write: if false; // adminCreateUser / updateTeacher functions keep claims in sync
+    }
+
+    match /parents/{parentId} {
+      allow read: if (signedIn() && uid() == parentId) || isAdmin();
+      allow write: if false; // server only (links children)
+    }
+
+    // ---------- catalogue & content ----------
+    match /courses/{courseId} {
+      allow read: if resource.data.published == true || isStaff();
+      allow write: if hasPerm('courses.manage');
+
+      match /chapters/{chapterId} {
+        // Chapter titles are public so the website can show the syllabus.
+        allow read: if resource.data.published == true || isStaff();
+        allow write: if hasPerm('courses.manage') || hasPerm('content.upload');
+
+        match /contents/{contentId} {
+          allow read: if isStaff()
+            || (resource.data.published == true
+                && (resource.data.get('freePreview', false) == true || isEnrolled(courseId) ));
+          allow write: if hasPerm('content.upload');
+        }
+      }
+    }
+
+    // ---------- live classes ----------
+    match /liveClasses/{classId} {
+      allow read: if isStaff() || isEnrolled(resource.data.courseId);
+      allow write: if hasPerm('live.manage');
+
+      // Join links are revealed only through the joinLiveClass function.
+      match /private/{docId} {
+        allow read, write: if hasPerm('live.manage');
+      }
+      match /attendance/{studentId} {
+        allow read: if isStaff() || isSelfOrGuardian(studentId);
+        allow write: if hasPerm('attendance.manage');
+      }
+    }
+
+    // ---------- examinations ----------
+    match /exams/{examId} {
+      allow read: if isStaff() || (resource.data.published == true && isEnrolled(resource.data.courseId));
+      allow write: if hasPerm('exams.manage');
+
+      match /questions/{questionId} {
+        allow read, write: if hasPerm('exams.manage') || hasPerm('exams.evaluate');
+      }
+    }
+
+    match /examKeys/{examId}/{document=**} {
+      allow read, write: if hasPerm('exams.manage');
+    }
+
+    match /questionBank/{questionId} {
+      allow read, write: if hasPerm('exams.manage');
+    }
+
+    match /attempts/{attemptId} {
+      allow read: if isStaff() || (signedIn() && isSelfOrGuardian(resource.data.studentId));
+      allow write: if false; // startExam / submitExam / gradeSubjective functions
+    }
+
+    // ---------- homework ----------
+    match /homework/{homeworkId} {
+      allow read: if isStaff() || (resource.data.published == true && isEnrolled(resource.data.courseId));
+      allow write: if hasPerm('homework.manage');
+    }
+
+    match /homeworkSubmissions/{submissionId} {
+      allow read: if isStaff() || (signedIn() && isSelfOrGuardian(resource.data.studentId));
+      allow create: if isStudent()
+        && submissionId == request.resource.data.homeworkId + '_' + uid()
+        && request.resource.data.studentId == uid()
+        && request.resource.data.status == 'submitted'
+        && request.resource.data.uploadPaths is list
+        && request.resource.data.uploadPaths.size() <= 10
+        && request.resource.data.keys().hasOnly(['homeworkId', 'studentId', 'courseId', 'uploadPaths', 'note', 'submittedAt', 'status'])
+        && request.resource.data.submittedAt == request.time
+        && isEnrolled(request.resource.data.courseId);
+      allow update: if isStudent() && resource.data.studentId == uid()
+        && resource.data.status == 'submitted'
+        && onlyChanges(['uploadPaths', 'note', 'submittedAt'])
+        && request.resource.data.submittedAt == request.time;
+      allow update: if hasPerm('homework.manage')
+        && onlyChanges(['status', 'marks', 'feedback', 'gradedBy', 'gradedAt']);
+      allow delete: if isAdmin();
+    }
+
+    // ---------- admissions / enquiries (public website form) ----------
+    match /enquiries/{enquiryId} {
+      allow create: if request.resource.data.keys().hasOnly(
+          ['type', 'name', 'phone', 'email', 'classLevel', 'board', 'courseSlug', 'preferredSlot', 'message', 'status', 'source', 'createdAt'])
+        && request.resource.data.type in ['admission', 'demo', 'contact', 'home_tuition']
+        && isStr(request.resource.data.name, 2, 80)
+        && isStr(request.resource.data.phone, 10, 16)
+        && optStr(request.resource.data, 'email', 120)
+        && optStr(request.resource.data, 'message', 1000)
+        && optStr(request.resource.data, 'courseSlug', 80)
+        && optStr(request.resource.data, 'preferredSlot', 80)
+        && request.resource.data.status == 'new'
+        && request.resource.data.source in ['website', 'app']
+        && request.resource.data.createdAt == request.time;
+      allow create: if isAdmin(); // walk-in / phone enquiries entered by staff
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ---------- fees & payments ----------
+    match /invoices/{invoiceId} {
+      allow read: if isAdmin() || (signedIn() && isSelfOrGuardian(resource.data.studentId));
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || (signedIn() && isSelfOrGuardian(resource.data.studentId));
+      allow write: if false; // createPaymentOrder / verifyPayment / webhook / recordOfflinePayment
+    }
+
+    // ---------- communication ----------
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      allow write: if hasPerm('announcements.send');
+    }
+
+    // ---------- learning progress ----------
+    match /progress/{studentId}/courses/{courseId} {
+      allow read: if isSelfOrGuardian(studentId) || isStaff();
+      allow write: if signedIn() && uid() == studentId && isEnrolled(courseId);
+    }
+
+    // ---------- public website content ----------
+    match /settings/public {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /settings/{docId} {
+      allow read, write: if isAdmin();
+    }
+    match /faculty/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /toppers/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /testimonials/{id} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if isAdmin();
+    }
+    match /materials/{id} {
+      allow read: if resource.data.published == true || isStaff();
+      allow write: if isAdmin() || hasPerm('content.upload');
+    }
+
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+  }
+}
