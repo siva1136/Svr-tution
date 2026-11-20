@@ -1,0 +1,33 @@
+{
+  "name": "svr-maths-academy",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SVR Digital Learning Platform \u2014 website, admin portal, backend and student app",
+  "workspaces": [
+    "shared",
+    "apps/website",
+    "apps/admin",
+    "backend/node-api",
+    "backend/cloud-functions",
+    "backend/scripts"
+  ],
+  "scripts": {
+    "dev:website": "npm run dev -w @svr/website",
+    "dev:admin": "npm run dev -w @svr/admin",
+    "build": "npm run build -w @svr/website -w @svr/admin -w @svr/cloud-functions",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "emulators": "firebase emulators:start --import=.emulator-data --export-on-exit",
+    "seed": "npm run seed -w @svr/scripts",
+    "deploy": "npm run build && firebase deploy",
+    "e2e": "npm run build -w @svr/cloud-functions && firebase emulators:exec --only auth,firestore,functions,storage \"npm run e2e -w @svr/scripts\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "^4.0.0",
+    "@types/node": "^22.0.0"
+  }
+}

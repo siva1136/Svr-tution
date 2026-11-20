@@ -1,0 +1,62 @@
+rules_version = '2';
+
+// SVR MATHS ACADEMY — Cloud Storage rules.
+// Large lecture videos are hosted on Cloudflare Stream; Storage holds PDFs,
+// images, homework/exam uploads and small media.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() { return request.auth != null; }
+    function role() { return signedIn() ? request.auth.token.get('role', '') : ''; }
+    function isAdmin() { return role() == 'admin'; }
+    function isStaff() { return role() == 'admin' || role() == 'teacher'; }
+    function hasPerm(p) {
+      return isAdmin() || (role() == 'teacher' && p in request.auth.token.get('perms', []));
+    }
+    function isEnrolled(courseId) {
+      return role() == 'student'
+        && courseId in firestore.get(/databases/(default)/documents/students/$(request.auth.uid)).data.get('enrolledCourseIds', []);
+    }
+    function isParentOf(studentId) {
+      return role() == 'parent'
+        && studentId in firestore.get(/databases/(default)/documents/parents/$(request.auth.uid)).data.get('childIds', []);
+    }
+    function isDoc() {
+      return request.resource.contentType.matches('application/pdf')
+        || request.resource.contentType.matches('image/.*');
+    }
+    function underMB(n) { return request.resource.size < n * 1024 * 1024; }
+
+    // Website images, free study materials, faculty photos.
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin() || hasPerm('content.upload');
+    }
+
+    // Course material: notes, NCERT solutions, DPP PDFs, small videos.
+    match /courses/{courseId}/{allPaths=**} {
+      allow read: if isStaff() || isEnrolled(courseId);
+      allow write: if hasPerm('content.upload') && underMB(500);
+    }
+
+    // Homework question attachments uploaded by teachers.
+    match /homework/{homeworkId}/{allPaths=**} {
+      allow read: if signedIn();
+      allow write: if hasPerm('homework.manage') && underMB(50);
+    }
+
+    // Student uploads: homework answers and subjective exam answers.
+    match /submissions/{studentId}/{allPaths=**} {
+      allow read: if isStaff() || (signedIn() && request.auth.uid == studentId) || isParentOf(studentId);
+      allow create, update: if signedIn() && request.auth.uid == studentId && isDoc() && underMB(15);
+      allow delete: if signedIn() && request.auth.uid == studentId;
+    }
+
+    // Profile photographs.
+    match /avatars/{userId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == userId
+        && request.resource.contentType.matches('image/.*') && underMB(5);
+    }
+  }
+}

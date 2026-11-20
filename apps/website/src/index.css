@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+  --color-ink-950: #060d22;
+  --color-ink-900: #0b1736;
+  --color-ink-800: #13244f;
+  --color-ink-700: #1d3470;
+  --color-royal-600: #3451d1;
+  --color-royal-500: #4e6bf0;
+  --color-royal-100: #e6ebff;
+  --color-gold-500: #f5b83d;
+  --color-gold-400: #f8c862;
+  --color-gold-100: #fff4dc;
+  --color-paper: #f7f6f2;
+}
+
+html { scroll-behavior: smooth; }
+body { @apply bg-paper text-ink-900 font-sans antialiased; }
+
+@utility container-x { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
+@utility btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60; }
+@utility btn-gold { @apply btn bg-gold-500 text-ink-950 hover:bg-gold-400 focus-visible:ring-gold-500; }
+@utility btn-dark { @apply btn bg-ink-900 text-white hover:bg-ink-800 focus-visible:ring-ink-900; }
+@utility btn-ghost { @apply btn border border-ink-900/15 bg-white/70 text-ink-900 hover:bg-white; }
+@utility btn-ghost-light { @apply btn border border-white/25 text-white hover:bg-white/10; }
+@utility eyebrow { @apply text-xs font-semibold uppercase tracking-[0.18em] text-royal-600; }
+@utility h-display { @apply font-display font-semibold tracking-tight; }
+@utility card { @apply rounded-3xl border border-ink-900/8 bg-white shadow-[0_1px_2px_rgba(11,23,54,.04),0_12px_32px_-12px_rgba(11,23,54,.12)]; }
+@utility field { @apply w-full rounded-xl border border-ink-900/15 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-ink-900/40 focus:border-royal-500 focus:ring-4 focus:ring-royal-500/15; }
+@utility label { @apply mb-1.5 block text-sm font-medium text-ink-900/80; }
+
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+@keyframes float-slow { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+.float-slow { animation: float-slow 7s ease-in-out infinite; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+.rise { animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { .float-slow, .rise { animation: none; } }
